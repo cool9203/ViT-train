@@ -1,5 +1,6 @@
 # coding: utf-8
 # Reference: https://huggingface.co/blog/fine-tune-vit
+# wandb reference: https://docs.wandb.ai/guides/integrations/huggingface
 
 from pathlib import Path
 
@@ -7,13 +8,21 @@ import datasets
 import evaluate
 import numpy as np
 import pandas as pd
+import shortuuid
 import torch
+import wandb
 from PIL import Image
 from transformers import Trainer, TrainingArguments, ViTForImageClassification, ViTImageProcessor
 
 model_name_or_path = "google/vit-base-patch16-224-in21k"
 processor = ViTImageProcessor.from_pretrained(model_name_or_path)
 metric = evaluate.load("accuracy")
+_learning_rate = 2e-4
+_train_epochs = 1
+_model_name = "ViT-classification"
+_run_id = shortuuid.uuid()
+
+wandb.login()
 
 
 class MyDataset(datasets.GeneratorBasedBuilder):
@@ -111,48 +120,65 @@ validation_labels = {data["labels"]: data["label_text"] for data in ds["validati
 label_to_text = {**train_labels, **validation_labels}
 labels = list(label_to_text.keys())
 
-print("Start load model")
-model = ViTForImageClassification.from_pretrained(
-    model_name_or_path,
-    num_labels=len(labels),
-    id2label={str(i): c for i, c in enumerate(labels)},
-    label2id={c: str(i) for i, c in enumerate(labels)},
-)
-print("End load model")
+# Create `.cache` dir
+Path(".cache").mkdir(exist_ok=True)
 
-training_args = TrainingArguments(
-    output_dir="./model",
-    per_device_train_batch_size=16,
-    eval_strategy="steps",
-    num_train_epochs=4,
-    fp16=True,
-    save_steps=100,
-    eval_steps=100,
-    logging_steps=10,
-    learning_rate=2e-4,
-    save_total_limit=2,
-    remove_unused_columns=False,
-    push_to_hub=False,
-    report_to="tensorboard",
-    load_best_model_at_end=True,
-)
+with wandb.init(
+    project="ViT-train",
+    id=_run_id,
+    dir=".cache",
+) as run:
+    # Connect an Artifact to the run
+    # my_checkpoint_name = f"checkpoint-{_run_id}:latest"
+    # my_checkpoint_artifact = run.use_artifact(_model_name)
 
-trainer = Trainer(
-    model=model,
-    args=training_args,
-    data_collator=collate_fn,
-    compute_metrics=compute_metrics,
-    train_dataset=prepared_ds["train"],
-    eval_dataset=prepared_ds["validation"],
-    tokenizer=processor,
-)
+    # Download checkpoint to a folder and return the path
+    # checkpoint_dir = my_checkpoint_artifact.download()
 
-train_results = trainer.train()
-trainer.save_model()
-trainer.log_metrics("train", train_results.metrics)
-trainer.save_metrics("train", train_results.metrics)
-trainer.save_state()
+    print("Start load model")
+    model = ViTForImageClassification.from_pretrained(
+        model_name_or_path,
+        num_labels=len(labels),
+        id2label=label_to_text,
+        label2id={v: k for k, v in label_to_text.items()},
+    )
+    print("End load model")
 
-metrics = trainer.evaluate(prepared_ds["validation"])
-trainer.log_metrics("eval", metrics)
-trainer.save_metrics("eval", metrics)
+    training_args = TrainingArguments(
+        output_dir=f"./model/{_run_id}",
+        per_device_train_batch_size=16,
+        eval_strategy="steps",
+        num_train_epochs=_train_epochs,
+        fp16=True,
+        save_steps=100,
+        eval_steps=100,
+        logging_steps=10,
+        learning_rate=_learning_rate,
+        save_total_limit=2,
+        remove_unused_columns=False,
+        push_to_hub=False,
+        load_best_model_at_end=True,
+        report_to="wandb",
+    )
+
+    trainer = Trainer(
+        model=model,
+        args=training_args,
+        data_collator=collate_fn,
+        compute_metrics=compute_metrics,
+        train_dataset=prepared_ds["train"],
+        eval_dataset=prepared_ds["validation"],
+        tokenizer=processor,
+    )
+
+    train_results = trainer.train(
+        # resume_from_checkpoint=checkpoint_dir,
+    )
+    trainer.save_model()
+    trainer.log_metrics("train", train_results.metrics)
+    trainer.save_metrics("train", train_results.metrics)
+    trainer.save_state()
+
+    metrics = trainer.evaluate(prepared_ds["validation"])
+    trainer.log_metrics("eval", metrics)
+    trainer.save_metrics("eval", metrics)
