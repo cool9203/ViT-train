@@ -1,0 +1,70 @@
+# 請注意:若包含'\'字元, 請使用''撰寫該字串, 否則'\'將會轉義 導致toml文件錯誤
+# toml 並不支援 null, 若還是想要設定 null 則代表要註解掉該行
+# Reference: https://toml.io/en/
+
+# [env]
+# file_path = ".env.toml" # Support list[str]
+
+
+[logger]
+log_level     = "DEBUG"
+log_fmt       = "DEBUG"  # [STD, DEBUG, MESSAGE, TIME_MESSAGE]
+log_path      = "./log"
+warning_level = "ignore"
+
+
+[build-system]
+requires      = ["hatchling"]
+build-backend = "hatchling.build"
+
+
+[project]
+name = "vit_train"
+dynamic = ["version"]
+authors = [{ name = "yoga", email = "ychsu@iii.org.tw" }]
+description = "A train vit script"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = ["Programming Language :: Python :: 3"]
+dependencies = [
+    "datasets>=2.19.1",
+    "transformers>=4.41.0",
+    "pillow>=10.3.0",
+    "scikit-learn>=1.4.2",
+    "evaluate>=0.4.2",
+    "imgaug>=0.4.0",
+    "accelerate>=0.30.1",
+    "tensorboardX>=2.6.2.2",
+]
+    [project.optional-dependencies]
+
+
+[tool]
+    [tool.ruff]
+    target-version = "py310"
+    line-length    = 130
+    ignore         = ["E402", "F841", "F401", "E203"]
+
+    [tool.isort]
+    profile = "ruff"
+
+    [tool.hatch.version]
+    path = "src/__init__.py"
+
+    [tool.coverage.run]
+    omit = ["*template*", "test/*", "utils/*", "*__init__.py*"]
+
+    [tool.coverage.report]
+    precision = 2
+    fail_under = 80.0
+    show_missing = true
+    skip_covered = true
+    exclude_lines = [
+        "# pragma: no cover",
+        "@abc.abstractclassmethod",
+        "@abc.abstractmethod",
+        "pass",
+        "if __name__ == *",
+        "def __repr__",
+        "if TYPE_CHECKING",
+    ]
