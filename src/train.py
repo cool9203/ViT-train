@@ -5,15 +5,7 @@
 import argparse
 from pathlib import Path
 
-import evaluate
-import numpy as np
-import torch
-import wandb
-from transformers import Trainer, TrainingArguments, ViTForImageClassification, ViTImageProcessor
-
 import utils
-
-from .util import MyDataset
 
 
 def train(
@@ -24,8 +16,18 @@ def train(
     batch_size: int,
     checkpoint_dir: str,
     cache_dir: str,
+    dataset_path: str,
+    project: str,
     **kwds,
 ) -> None:
+    import evaluate
+    import numpy as np
+    import torch
+    import wandb
+    from transformers import Trainer, TrainingArguments, ViTForImageClassification, ViTImageProcessor
+
+    from .util import MyDataset
+
     processor = ViTImageProcessor.from_pretrained(model_name_or_path)
     metric = evaluate.load("accuracy")
 
@@ -71,7 +73,7 @@ def train(
 
     print("Start load dataset")
     ds_builder = MyDataset(
-        data_dir="./data/dataset",
+        data_dir=dataset_path,
         cache_dir=cache_dir,
     )
     ds_builder.download_and_prepare()
@@ -85,7 +87,7 @@ def train(
     labels = list(label_to_text.keys())
 
     with wandb.init(
-        project="ViT-train",
+        project=project,
         id=run_id,
         dir=cache_dir,
     ) as run:
@@ -168,8 +170,10 @@ def arg_parser() -> argparse.Namespace:
     parser.add_argument("-l", "--learning_rate", type=float, default=2e-4, help="Training learning rate")
     parser.add_argument("-e", "--train_epochs", type=int, default=4, help="Training train epochs")
     parser.add_argument("-b", "--batch_size", type=int, default=16, help="Training batch size")
+    parser.add_argument("-d", "--dataset_path", type=str, default="./data/dataset", help="Dataset path")
     parser.add_argument("--checkpoint_dir", type=str, default=None, help="Continue training from checkpoint")
     parser.add_argument("--cache_dir", type=str, default=".cache", help="Data cache dir")
+    parser.add_argument("--project", type=str, default="ViT-train", help="Wandb project name")
 
     args = parser.parse_args()
 
