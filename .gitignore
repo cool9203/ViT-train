@@ -171,3 +171,6 @@ model/
 
 # data
 data/
+
+# wandb
+.wandb-config.toml
